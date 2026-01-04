@@ -4,7 +4,7 @@ import com.isa.backend.dto.RegisterRequest;
 import com.isa.backend.model.User;
 import com.isa.backend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-//import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,8 +17,8 @@ public class UserService {
     @Autowired
     private UserRepository userRepository;
 
-    //@Autowired
-    //private PasswordEncoder passwordEncoder;
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @Autowired
     private EmailService emailService;
@@ -44,7 +44,7 @@ public class UserService {
         User user = new User();
         user.setEmail(request.getEmail());
         user.setUsername(request.getUsername());
-        user.setPassword(request.getPassword());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
         user.setAddress(request.getAddress());
@@ -59,8 +59,8 @@ public class UserService {
         User savedUser = userRepository.save(user);
 
         // Slanje aktivacionog email-a
-        //String activationLink = "http://localhost:8080/api/auth/activate?token=" + activationToken;
-        //emailService.sendActivationEmail(user.getEmail(), activationLink);
+        String activationLink = "http://localhost:8080/api/auth/activate?token=" + activationToken;
+        emailService.sendActivationEmail(user.getEmail(), activationLink);
 
         return savedUser;
     }
