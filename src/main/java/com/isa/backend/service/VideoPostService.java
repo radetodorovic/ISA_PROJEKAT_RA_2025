@@ -131,6 +131,14 @@ public class VideoPostService {
     }
 
     /**
+     * Vraća VideoPost entitet na osnovu sačuvanog videoPath (koristi se za mapiranje filename -> videoId)
+     */
+    public VideoPost getVideoPostByVideoPath(String videoPath) {
+        return videoPostRepository.findByVideoPath(videoPath)
+                .orElseThrow(() -> new RuntimeException("Video objava nije pronađena za dati filename: " + videoPath));
+    }
+
+    /**
      * Konvertuje VideoPost entitet u DTO
      */
     private VideoPostDTO convertToDTO(VideoPost videoPost, boolean authenticated) {

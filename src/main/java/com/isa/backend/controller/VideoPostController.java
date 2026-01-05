@@ -3,6 +3,7 @@ package com.isa.backend.controller;
 import com.isa.backend.dto.CommentDTO;
 import com.isa.backend.dto.VideoPostDTO;
 import com.isa.backend.model.User;
+import com.isa.backend.model.VideoPost;
 import com.isa.backend.service.CommentService;
 import com.isa.backend.service.UserService;
 import com.isa.backend.service.VideoPostService;
@@ -162,7 +163,7 @@ public class VideoPostController {
     /**
      * 🖼️ Vraća thumbnail sliku
      */
-    @GetMapping("/thumbnail/{filename}")
+    @GetMapping("/thumbnail/{filename:.+}")
     public ResponseEntity<Resource> getThumbnail(@PathVariable String filename) {
         try {
             Path filePath = Paths.get("uploads/thumbnails").resolve(filename).normalize();
@@ -181,9 +182,24 @@ public class VideoPostController {
     }
 
     /**
+     * Vraća komentare za video na osnovu filename-a koji se koristi u stream URL-u
+     * GET /api/videos/stream/{filename}/comments
+     */
+    @GetMapping("/stream/{filename:.+}/comments")
+    public ResponseEntity<?> getCommentsByFilename(@PathVariable String filename) {
+        try {
+            VideoPost vp = videoPostService.getVideoPostByVideoPath(filename);
+            List<CommentDTO> comments = commentService.getCommentsForVideo(vp.getId());
+            return ResponseEntity.ok(comments);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        }
+    }
+
+    /**
      * 🎬 Stream-uje video fajl
      */
-    @GetMapping("/stream/{filename}")
+    @GetMapping("/stream/{filename:.+}")
     public ResponseEntity<Resource> streamVideo(@PathVariable String filename, HttpServletRequest request) {
         try {
             // Increment view count only for initial requests (no Range header or Range starting at 0)
@@ -209,3 +225,4 @@ public class VideoPostController {
         }
     }
 }
+
