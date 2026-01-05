@@ -28,6 +28,10 @@ public class VideoPostDTO {
     private Integer likeCount;
     private Integer commentCount;
 
+    // Flags to help frontend decide whether to show like/comment UI
+    private boolean canLike = false;
+    private boolean canComment = false;
+
     // Constructors
     public VideoPostDTO() {}
 
@@ -134,5 +138,21 @@ public class VideoPostDTO {
 
     public void setCommentCount(Integer commentCount) {
         this.commentCount = commentCount;
+    }
+
+    public boolean isCanLike() {
+        return canLike;
+    }
+
+    public void setCanLike(boolean canLike) {
+        this.canLike = canLike;
+    }
+
+    public boolean isCanComment() {
+        return canComment;
+    }
+
+    public void setCanComment(boolean canComment) {
+        this.canComment = canComment;
     }
 }

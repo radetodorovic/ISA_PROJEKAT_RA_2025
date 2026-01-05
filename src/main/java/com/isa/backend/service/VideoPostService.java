@@ -67,7 +67,7 @@ public class VideoPostService {
             VideoPost savedPost = videoPostRepository.save(videoPost);
 
             // 5. Vrati DTO
-            return convertToDTO(savedPost);
+            return convertToDTO(savedPost, true);
 
         } catch (Exception e) {
             // Rollback: obriši fajlove ako nešto pođe po zlu
@@ -85,9 +85,13 @@ public class VideoPostService {
      * Vraća sve video objave
      */
     public List<VideoPostDTO> getAllVideoPosts() {
+        return getAllVideoPosts(false);
+    }
+
+    public List<VideoPostDTO> getAllVideoPosts(boolean authenticated) {
         return videoPostRepository.findAllByOrderByCreatedAtDesc()
                 .stream()
-                .map(this::convertToDTO)
+                .map(vp -> convertToDTO(vp, authenticated))
                 .collect(Collectors.toList());
     }
 
@@ -95,15 +99,41 @@ public class VideoPostService {
      * Vraća video objavu po ID-u
      */
     public VideoPostDTO getVideoPostById(Long id) {
+        return getVideoPostById(id, false);
+    }
+
+    public VideoPostDTO getVideoPostById(Long id, boolean authenticated) {
         VideoPost videoPost = videoPostRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Video objava nije pronađena!"));
-        return convertToDTO(videoPost);
+        return convertToDTO(videoPost, authenticated);
+    }
+
+    /**
+     * Povećava broj lajkova (jednostavno increment)
+     */
+    @Transactional
+    public void incrementLikeCount(Long id) {
+        VideoPost videoPost = videoPostRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Video objava nije pronađena!"));
+        videoPost.setLikeCount(videoPost.getLikeCount() + 1);
+        videoPostRepository.save(videoPost);
+    }
+
+    /**
+     * Povećava broj pregleda za data videoPath (koristi se u stream endpoint-u)
+     */
+    @Transactional
+    public void incrementViewCountByPath(String videoPath) {
+        videoPostRepository.findByVideoPath(videoPath).ifPresent(videoPost -> {
+            videoPost.setViewCount(videoPost.getViewCount() + 1);
+            videoPostRepository.save(videoPost);
+        });
     }
 
     /**
      * Konvertuje VideoPost entitet u DTO
      */
-    private VideoPostDTO convertToDTO(VideoPost videoPost) {
+    private VideoPostDTO convertToDTO(VideoPost videoPost, boolean authenticated) {
         VideoPostDTO dto = new VideoPostDTO();
         dto.setId(videoPost.getId());
         dto.setTitle(videoPost.getTitle());
@@ -118,6 +148,11 @@ public class VideoPostService {
         dto.setViewCount(videoPost.getViewCount());
         dto.setLikeCount(videoPost.getLikeCount());
         dto.setCommentCount(videoPost.getCommentCount());
+
+        // If the caller is authenticated, enable like/comment actions on the DTO
+        dto.setCanLike(authenticated);
+        dto.setCanComment(authenticated);
+
         return dto;
     }
 }

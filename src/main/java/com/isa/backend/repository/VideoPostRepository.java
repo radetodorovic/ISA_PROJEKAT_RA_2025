@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface VideoPostRepository extends JpaRepository<VideoPost, Long> {
@@ -17,4 +18,7 @@ public interface VideoPostRepository extends JpaRepository<VideoPost, Long> {
 
     // Pronađi najnovije video objave (sortirane po datumu kreiranja)
     List<VideoPost> findAllByOrderByCreatedAtDesc();
+
+    // Pronađi video post po putanji fajla (koristi se za inkrement viewCount pri stream-u)
+    Optional<VideoPost> findByVideoPath(String videoPath);
 }
