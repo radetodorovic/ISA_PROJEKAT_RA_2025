@@ -5,6 +5,7 @@ import com.isa.backend.dto.VideoPostDTO;
 import com.isa.backend.model.User;
 import com.isa.backend.model.VideoPost;
 import com.isa.backend.service.CommentService;
+import com.isa.backend.service.FileStorageService;
 import com.isa.backend.service.UserService;
 import com.isa.backend.service.VideoPostService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.Files;
 import java.security.Principal;
 import java.util.List;
 import java.util.Set;
@@ -38,6 +40,9 @@ public class VideoPostController {
 
     @Autowired
     private CommentService commentService;
+
+    @Autowired
+    private FileStorageService fileStorageService;
 
     /**
      * 🎬 Endpoint za kreiranje video objave
@@ -164,18 +169,20 @@ public class VideoPostController {
      * 🖼️ Vraća thumbnail sliku
      */
     @GetMapping("/thumbnail/{filename:.+}")
-    public ResponseEntity<Resource> getThumbnail(@PathVariable String filename) {
+    public ResponseEntity<byte[]> getThumbnail(@PathVariable String filename) {
         try {
+            byte[] data = fileStorageService.getThumbnailBytes(filename);
             Path filePath = Paths.get("uploads/thumbnails").resolve(filename).normalize();
-            Resource resource = new UrlResource(filePath.toUri());
-
-            if (resource.exists()) {
-                return ResponseEntity.ok()
-                        .contentType(MediaType.IMAGE_JPEG)
-                        .body(resource);
-            } else {
-                return ResponseEntity.notFound().build();
+            String contentType = Files.probeContentType(filePath);
+            MediaType mediaType = MediaType.IMAGE_JPEG;
+            if (contentType != null) {
+                mediaType = MediaType.parseMediaType(contentType);
             }
+            return ResponseEntity.ok()
+                    .contentType(mediaType)
+                    .body(data);
+        } catch (IOException e) {
+            return ResponseEntity.notFound().build();
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
@@ -225,4 +232,3 @@ public class VideoPostController {
         }
     }
 }
-

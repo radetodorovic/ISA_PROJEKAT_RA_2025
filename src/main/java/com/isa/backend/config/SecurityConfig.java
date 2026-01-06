@@ -25,7 +25,7 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         http
                 // Enable CORS support so Spring Security uses the WebMvc CORS configuration (WebConfig)
-                .cors().and()
+                .cors(cors -> cors.configure(http))
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -35,6 +35,8 @@ public class SecurityConfig {
                         // Public endpoints (GETs)
                         .requestMatchers(HttpMethod.GET, "/api/videos/**", "/api/videos/thumbnail/**", "/api/videos/stream/**", "/api/users/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
+                        // Allow root and static resources (for health checks, welcome page, etc.)
+                        .requestMatchers("/", "/error", "/actuator/**", "/favicon.ico").permitAll()
                         // Anything else requires authentication (uploads, comments, likes, user actions)
                         .anyRequest().authenticated()
                 )

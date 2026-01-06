@@ -7,6 +7,12 @@ out/
 target/
 build/
 .gradle/
+.mvn/
+!.mvn/wrapper/maven-wrapper.properties
+*.zip
+
+# Spring Boot
+uploads/
 
 # Logs
 *.log
