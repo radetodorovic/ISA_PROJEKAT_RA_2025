@@ -31,16 +31,23 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         http
                 .cors(Customizer.withDefaults()) // enable CORS support in Spring Security
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Allow preflight requests
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        // Public endpoints (GETs)
+                        .requestMatchers(HttpMethod.GET, "/api/videos/**", "/api/videos/thumbnail/**", "/api/videos/stream/**", "/api/users/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
-                        .anyRequest().permitAll()  // Privremeno
-                );
+                        // Anything else requires authentication (uploads, comments, likes, user actions)
+                        .anyRequest().authenticated()
+                )
+                // Add our JWT filter before the username/password filter
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         // Register JWT filter to populate SecurityContext from Authorization header
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
