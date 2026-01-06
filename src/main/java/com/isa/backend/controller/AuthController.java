@@ -14,15 +14,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
-
 @RestController
 @RequestMapping("/api/auth")
-// Global CORS is configured in CorsConfig / SecurityConfig with allowCredentials(true).
-// Allowing "*" at controller level conflicts with allowCredentials(true) and causes
-// the runtime IllegalArgumentException. Use an explicit origin or remove this annotation
-// to rely on the global configuration.
-@CrossOrigin(origins = "http://localhost:4200")
+@CrossOrigin(origins = "*")
 public class AuthController {
 
     @Autowired
@@ -44,7 +38,7 @@ public class AuthController {
             return ResponseEntity.ok(new AuthResponse(null,
                     "Registracija uspešna! Proverite email za aktivacioni link."));
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("status",400,"message",e.getMessage()));
+            return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 
@@ -52,9 +46,9 @@ public class AuthController {
     public ResponseEntity<?> activateAccount(@RequestParam("token") String token) {
         try {
             userService.activateAccount(token);
-            return ResponseEntity.ok(Map.of("status",200,"message","Nalog je uspešno aktiviran! Možete se prijaviti."));
+            return ResponseEntity.ok("Nalog je uspešno aktiviran! Možete se prijaviti.");
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("status",400,"message",e.getMessage()));
+            return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 
@@ -66,19 +60,19 @@ public class AuthController {
 
             // Proveri da li je IP blokiran
             if (loginAttemptService.isBlocked(ipAddress)) {
-                return ResponseEntity.status(429).body(Map.of("status",429,"message","Previše pokušaja prijave. Pokušajte ponovo za 1 minut."));
+                return ResponseEntity.status(429).body("Previše pokušaja prijave. Pokušajte ponovo za 1 minut.");
             }
 
             User user = userService.findByEmail(request.getEmail());
 
             if (!user.isEnabled()) {
                 loginAttemptService.loginFailed(ipAddress);
-                return ResponseEntity.badRequest().body(Map.of("status",400,"message","Nalog nije aktiviran. Proverite email."));
+                return ResponseEntity.badRequest().body("Nalog nije aktiviran. Proverite email.");
             }
 
             if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
                 loginAttemptService.loginFailed(ipAddress);
-                return ResponseEntity.badRequest().body(Map.of("status",400,"message","Pogrešna lozinka"));
+                return ResponseEntity.badRequest().body("Pogrešna lozinka");
             }
 
             // Uspešan login - resetuj pokušaje
@@ -90,7 +84,7 @@ public class AuthController {
         } catch (RuntimeException e) {
             String ipAddress = getClientIP(httpRequest);
             loginAttemptService.loginFailed(ipAddress);
-            return ResponseEntity.badRequest().body(Map.of("status",400,"message",e.getMessage()));
+            return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 
