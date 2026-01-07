@@ -24,6 +24,7 @@ import java.security.Principal;
 import java.util.List;
 import java.util.Set;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 
 @RestController
 @RequestMapping("/api/videos")
@@ -38,6 +39,13 @@ public class VideoPostController {
 
     @Autowired
     private CommentService commentService;
+
+    // Use same dirs as FileStorageService to avoid mismatches
+    @Value("${file.upload.dir}")
+    private String videoUploadDir;
+
+    @Value("${file.thumbnail.dir}")
+    private String thumbnailUploadDir;
 
     /**
      * 🎬 Endpoint za kreiranje video objave
@@ -166,7 +174,9 @@ public class VideoPostController {
     @GetMapping("/thumbnail/{filename:.+}")
     public ResponseEntity<Resource> getThumbnail(@PathVariable String filename) {
         try {
-            Path filePath = Paths.get("uploads/thumbnails").resolve(filename).normalize();
+            Path filePath = Paths.get(thumbnailUploadDir).resolve(filename).normalize();
+            // debug log
+            System.out.println("THUMBNAIL: resolving file path -> " + filePath.toAbsolutePath());
             Resource resource = new UrlResource(filePath.toUri());
 
             if (resource.exists()) {
@@ -209,7 +219,9 @@ public class VideoPostController {
                 videoPostService.incrementViewCountByPath(filename);
             }
 
-            Path filePath = Paths.get("uploads/videos").resolve(filename).normalize();
+            Path filePath = Paths.get(videoUploadDir).resolve(filename).normalize();
+            // debug log to help track missing files
+            System.out.println("STREAM: resolving file path -> " + filePath.toAbsolutePath());
             Resource resource = new UrlResource(filePath.toUri());
 
             if (resource.exists()) {
@@ -224,5 +236,32 @@ public class VideoPostController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
-}
 
+    /**
+     * Endpoint za administraciju - vraća listu video objava čiji fajlovi nedostaju
+     * GET /api/videos/admin/missing-files
+     */
+    @GetMapping("/admin/missing-files")
+    public ResponseEntity<?> getMissingVideoFiles() {
+        try {
+            List<java.util.Map<String, String>> missing = videoPostService.findMissingVideoFiles();
+            return ResponseEntity.ok(missing);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to check missing files");
+        }
+    }
+
+    /**
+     * Endpoint za administraciju - pokušaj da se automatski usaglase nedostajući fajlovi
+     * GET /api/videos/admin/reconcile
+     */
+    @GetMapping("/admin/reconcile")
+    public ResponseEntity<?> reconcileMissingFiles() {
+        try {
+            List<java.util.Map<String, String>> res = videoPostService.reconcileMissingVideoFiles();
+            return ResponseEntity.ok(res);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to reconcile missing files");
+        }
+    }
+}
