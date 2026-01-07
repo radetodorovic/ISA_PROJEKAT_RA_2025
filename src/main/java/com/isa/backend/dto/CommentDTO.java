@@ -6,6 +6,7 @@ public class CommentDTO {
     private Long id;
     private String text;
     private Long userId;
+    private String username;
     private Long videoPostId;
     private LocalDateTime createdAt;
 
@@ -35,6 +36,14 @@ public class CommentDTO {
         this.userId = userId;
     }
 
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
     public Long getVideoPostId() {
         return videoPostId;
     }
@@ -51,4 +60,3 @@ public class CommentDTO {
         this.createdAt = createdAt;
     }
 }
-
