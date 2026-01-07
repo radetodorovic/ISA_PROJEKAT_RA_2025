@@ -2,6 +2,7 @@ package com.isa.backend.controller;
 
 import com.isa.backend.dto.CommentDTO;
 import com.isa.backend.dto.VideoPostDTO;
+import com.isa.backend.exception.RateLimitExceededException;
 import com.isa.backend.model.User;
 import com.isa.backend.model.VideoPost;
 import com.isa.backend.service.CommentService;
@@ -130,18 +131,39 @@ public class VideoPostController {
             User user = userService.findByEmail(principal.getName());
             CommentDTO saved = commentService.addComment(id, user.getId(), text);
             return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+        } catch (RateLimitExceededException e) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(e.getMessage());
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
     }
 
     @GetMapping("/{id}/comments")
-    public ResponseEntity<?> getComments(@PathVariable Long id) {
+    public ResponseEntity<?> getComments(@PathVariable Long id,
+                                         @RequestParam(value = "page", required = false, defaultValue = "0") int page,
+                                         @RequestParam(value = "size", required = false, defaultValue = "20") int size) {
         try {
-            List<CommentDTO> comments = commentService.getCommentsForVideo(id);
+            List<CommentDTO> comments = commentService.getCommentsForVideo(id, page, size);
             return ResponseEntity.ok(comments);
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+
+    /**
+     * Vraća komentare za video na osnovu filename-a koji se koristi u stream URL-u
+     * GET /api/videos/stream/{filename}/comments
+     */
+    @GetMapping("/stream/{filename:.+}/comments")
+    public ResponseEntity<?> getCommentsByFilename(@PathVariable String filename,
+                                                   @RequestParam(value = "page", required = false, defaultValue = "0") int page,
+                                                   @RequestParam(value = "size", required = false, defaultValue = "20") int size) {
+        try {
+            VideoPost vp = videoPostService.getVideoPostByVideoPath(filename);
+            List<CommentDTO> comments = commentService.getCommentsForVideo(vp.getId(), page, size);
+            return ResponseEntity.ok(comments);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         }
     }
 
@@ -191,20 +213,6 @@ public class VideoPostController {
         }
     }
 
-    /**
-     * Vraća komentare za video na osnovu filename-a koji se koristi u stream URL-u
-     * GET /api/videos/stream/{filename}/comments
-     */
-    @GetMapping("/stream/{filename:.+}/comments")
-    public ResponseEntity<?> getCommentsByFilename(@PathVariable String filename) {
-        try {
-            VideoPost vp = videoPostService.getVideoPostByVideoPath(filename);
-            List<CommentDTO> comments = commentService.getCommentsForVideo(vp.getId());
-            return ResponseEntity.ok(comments);
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        }
-    }
 
     /**
      * 🎬 Stream-uje video fajl
