@@ -6,6 +6,7 @@ import com.isa.backend.exception.RateLimitExceededException;
 import com.isa.backend.model.User;
 import com.isa.backend.model.VideoPost;
 import com.isa.backend.service.CommentService;
+import com.isa.backend.service.FileStorageService;
 import com.isa.backend.service.UserService;
 import com.isa.backend.service.VideoPostService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.Files;
 import java.security.Principal;
 import java.util.List;
 import java.util.Set;
@@ -41,12 +43,8 @@ public class VideoPostController {
     @Autowired
     private CommentService commentService;
 
-    // Use same dirs as FileStorageService to avoid mismatches
-    @Value("${file.upload.dir}")
-    private String videoUploadDir;
-
-    @Value("${file.thumbnail.dir}")
-    private String thumbnailUploadDir;
+    @Autowired
+    private FileStorageService fileStorageService;
 
     /**
      * 🎬 Endpoint za kreiranje video objave
@@ -194,20 +192,20 @@ public class VideoPostController {
      * 🖼️ Vraća thumbnail sliku
      */
     @GetMapping("/thumbnail/{filename:.+}")
-    public ResponseEntity<Resource> getThumbnail(@PathVariable String filename) {
+    public ResponseEntity<byte[]> getThumbnail(@PathVariable String filename) {
         try {
-            Path filePath = Paths.get(thumbnailUploadDir).resolve(filename).normalize();
-            // debug log
-            System.out.println("THUMBNAIL: resolving file path -> " + filePath.toAbsolutePath());
-            Resource resource = new UrlResource(filePath.toUri());
-
-            if (resource.exists()) {
-                return ResponseEntity.ok()
-                        .contentType(MediaType.IMAGE_JPEG)
-                        .body(resource);
-            } else {
-                return ResponseEntity.notFound().build();
+            byte[] data = fileStorageService.getThumbnailBytes(filename);
+            Path filePath = Paths.get("uploads/thumbnails").resolve(filename).normalize();
+            String contentType = Files.probeContentType(filePath);
+            MediaType mediaType = MediaType.IMAGE_JPEG;
+            if (contentType != null) {
+                mediaType = MediaType.parseMediaType(contentType);
             }
+            return ResponseEntity.ok()
+                    .contentType(mediaType)
+                    .body(data);
+        } catch (IOException e) {
+            return ResponseEntity.notFound().build();
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
@@ -242,34 +240,6 @@ public class VideoPostController {
             }
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-
-    /**
-     * Endpoint za administraciju - vraća listu video objava čiji fajlovi nedostaju
-     * GET /api/videos/admin/missing-files
-     */
-    @GetMapping("/admin/missing-files")
-    public ResponseEntity<?> getMissingVideoFiles() {
-        try {
-            List<java.util.Map<String, String>> missing = videoPostService.findMissingVideoFiles();
-            return ResponseEntity.ok(missing);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to check missing files");
-        }
-    }
-
-    /**
-     * Endpoint za administraciju - pokušaj da se automatski usaglase nedostajući fajlovi
-     * GET /api/videos/admin/reconcile
-     */
-    @GetMapping("/admin/reconcile")
-    public ResponseEntity<?> reconcileMissingFiles() {
-        try {
-            List<java.util.Map<String, String>> res = videoPostService.reconcileMissingVideoFiles();
-            return ResponseEntity.ok(res);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to reconcile missing files");
         }
     }
 }

@@ -35,8 +35,12 @@ public class AuthController {
     public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request) {
         try {
             User user = userService.registerUser(request);
-            return ResponseEntity.ok(new AuthResponse(null,
-                    "Registracija uspešna! Proverite email za aktivacioni link."));
+
+            // Generiši JWT token odmah nakon registracije
+            String token = jwtUtil.generateToken(user.getEmail());
+
+            return ResponseEntity.ok(new AuthResponse(token,
+                    "Registracija uspešna! Automatski ste prijavljeni."));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }

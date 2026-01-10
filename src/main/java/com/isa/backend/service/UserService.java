@@ -48,9 +48,12 @@ public class UserService {
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
         user.setAddress(request.getAddress());
-        user.setEnabled(false);
 
-        // Generisanje aktivacionog tokena
+        // TODO: Za production, vratiti email verifikaciju
+        // Privremeno automatski aktiviramo nalog za testiranje
+        user.setEnabled(true);
+
+        // Generisanje aktivacionog tokena (opciono za production)
         String activationToken = UUID.randomUUID().toString();
         user.setActivationToken(activationToken);
         user.setTokenExpiryDate(LocalDateTime.now().plusHours(24));
@@ -58,9 +61,14 @@ public class UserService {
         // Čuvanje korisnika
         User savedUser = userRepository.save(user);
 
-        // Slanje aktivacionog email-a
-        String activationLink = "http://localhost:8080/api/auth/activate?token=" + activationToken;
-        emailService.sendActivationEmail(user.getEmail(), activationLink);
+        // Slanje aktivacionog email-a (opciono za production)
+        try {
+            String activationLink = "http://localhost:8080/api/auth/activate?token=" + activationToken;
+            emailService.sendActivationEmail(user.getEmail(), activationLink);
+        } catch (Exception e) {
+            // Ignorišemo grešku ako email servis nije konfigurisan
+            System.out.println("Email servis nije dostupan, nalog je automatski aktiviran.");
+        }
 
         return savedUser;
     }
