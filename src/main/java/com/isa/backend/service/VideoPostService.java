@@ -37,6 +37,9 @@ public class VideoPostService {
     @Autowired
     private FileStorageService fileStorageService;
 
+    @Value("${file.upload.dir:uploads/videos}")
+    private String videoUploadDir;
+
     @Value("${app.upload.timeout-ms:60000}")
     private long uploadTimeoutMs;
 
@@ -177,13 +180,25 @@ public class VideoPostService {
 
     /**
      * Povećava broj pregleda za data videoPath (koristi se u stream endpoint-u)
+     * Thread-safe implementacija koristi atomski UPDATE na nivou baze podataka
      */
     @Transactional
     public void incrementViewCountByPath(String videoPath) {
-        videoPostRepository.findByVideoPath(videoPath).ifPresent(videoPost -> {
-            videoPost.setViewCount(videoPost.getViewCount() + 1);
-            videoPostRepository.save(videoPost);
-        });
+        int updated = videoPostRepository.incrementViewCountByVideoPath(videoPath);
+        if (updated == 0) {
+            logger.warn("Video sa videoPath '{}' nije pronađen ili view count nije ažuriran.", videoPath);
+        }
+    }
+
+    /**
+     * Povećava broj pregleda za dati video ID (thread-safe)
+     */
+    @Transactional
+    public void incrementViewCountById(Long id) {
+        int updated = videoPostRepository.incrementViewCountById(id);
+        if (updated == 0) {
+            throw new RuntimeException("Video objava nije pronađena za dati id: " + id);
+        }
     }
 
     /**
