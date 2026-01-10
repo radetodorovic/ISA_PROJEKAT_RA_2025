@@ -46,6 +46,9 @@ public class VideoPostController {
     @Autowired
     private FileStorageService fileStorageService;
 
+    @Value("${file.upload.dir:uploads/videos}")
+    private String videoUploadDir;
+
     /**
      * 🎬 Endpoint za kreiranje video objave
      * POST /api/videos/upload
