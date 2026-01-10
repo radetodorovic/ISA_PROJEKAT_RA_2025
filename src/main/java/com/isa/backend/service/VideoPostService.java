@@ -14,7 +14,14 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -169,17 +176,6 @@ public class VideoPostService {
     }
 
     /**
-     * Povećava broj lajkova (jednostavno increment)
-     */
-    @Transactional
-    public void incrementLikeCount(Long id) {
-        VideoPost videoPost = videoPostRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Video objava nije pronađena!"));
-        videoPost.setLikeCount(videoPost.getLikeCount() + 1);
-        videoPostRepository.save(videoPost);
-    }
-
-    /**
      * Povećava broj pregleda za data videoPath (koristi se u stream endpoint-u)
      */
     @Transactional
@@ -196,6 +192,101 @@ public class VideoPostService {
     public VideoPost getVideoPostByVideoPath(String videoPath) {
         return videoPostRepository.findByVideoPath(videoPath)
                 .orElseThrow(() -> new RuntimeException("Video objava nije pronađena za dati filename: " + videoPath));
+    }
+
+    /**
+     * Finds DB video posts whose file does not exist on disk.
+     * Returns a list of maps: { id, videoPath, expectedPath }
+     */
+    public List<Map<String, String>> findMissingVideoFiles() {
+        List<VideoPost> all = videoPostRepository.findAll();
+        List<Map<String, String>> missing = new ArrayList<>();
+        for (VideoPost vp : all) {
+            try {
+                Path expected = Paths.get(videoUploadDir).resolve(vp.getVideoPath()).normalize();
+                if (!Files.exists(expected)) {
+                    Map<String, String> m = new HashMap<>();
+                    m.put("id", vp.getId().toString());
+                    m.put("videoPath", vp.getVideoPath());
+                    m.put("expectedPath", expected.toAbsolutePath().toString());
+                    missing.add(m);
+                }
+            } catch (Exception ex) {
+                // ignore individual errors but continue
+            }
+        }
+        return missing;
+    }
+
+    /**
+     * Try to reconcile missing video files by matching file sizes in the upload directory.
+     * For each VideoPost whose expected file is missing, scan existing files in the upload dir
+     * and copy the first file whose size equals the videoSize into the expected filename.
+     * Returns a list of maps with reconciliation results.
+     */
+    public List<Map<String, String>> reconcileMissingVideoFiles() {
+        List<VideoPost> all = videoPostRepository.findAll();
+        List<Map<String, String>> results = new ArrayList<>();
+        Path uploadDir = Paths.get(videoUploadDir);
+
+        for (VideoPost vp : all) {
+            Map<String, String> r = new HashMap<>();
+            r.put("id", vp.getId().toString());
+            r.put("videoPath", vp.getVideoPath());
+            try {
+                Path expected = uploadDir.resolve(vp.getVideoPath()).normalize();
+                if (Files.exists(expected)) {
+                    r.put("status", "already_exists");
+                    r.put("expectedPath", expected.toAbsolutePath().toString());
+                    results.add(r);
+                    continue;
+                }
+
+                boolean matched = false;
+                if (Files.exists(uploadDir) && Files.isDirectory(uploadDir)) {
+                    try (java.util.stream.Stream<Path> stream = Files.list(uploadDir)) {
+                        for (Path candidate : (Iterable<Path>) stream::iterator) {
+                            try {
+                                long candidateSize = Files.size(candidate);
+                                Long expectedSize = vp.getVideoSize();
+                                if (expectedSize != null && candidateSize == expectedSize) {
+                                    // copy candidate to expected
+                                    Files.copy(candidate, expected, StandardCopyOption.REPLACE_EXISTING);
+                                    r.put("status", "copied");
+                                    r.put("matchedFile", candidate.getFileName().toString());
+                                    r.put("expectedPath", expected.toAbsolutePath().toString());
+                                    matched = true;
+                                    break;
+                                }
+                            } catch (Exception ex) {
+                                // ignore candidate errors
+                            }
+                        }
+                    }
+                }
+
+                if (!matched) {
+                    r.put("status", "not_found");
+                }
+            } catch (Exception ex) {
+                r.put("status", "error");
+                r.put("error", ex.getMessage() == null ? "unknown" : ex.getMessage());
+            }
+            results.add(r);
+        }
+
+        return results;
+    }
+
+    /**
+     * Povećava broj lajkova za dati video ID
+     */
+    @Transactional
+    public void incrementLikeCount(Long id) {
+        VideoPost videoPost = videoPostRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Video objava nije pronađena za dati id: " + id));
+        videoPost.setLikeCount(videoPost.getLikeCount() + 1);
+        videoPostRepository.save(videoPost);
     }
 
     /**
