@@ -3,6 +3,8 @@ package com.isa.backend.service;
 import com.isa.backend.dto.RegisterRequest;
 import com.isa.backend.model.User;
 import com.isa.backend.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -13,6 +15,8 @@ import java.util.UUID;
 
 @Service
 public class UserService {
+
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
     @Autowired
     private UserRepository userRepository;
@@ -49,11 +53,10 @@ public class UserService {
         user.setLastName(request.getLastName());
         user.setAddress(request.getAddress());
 
-        // TODO: Za production, vratiti email verifikaciju
-        // Privremeno automatski aktiviramo nalog za testiranje
-        user.setEnabled(true);
+        // For production we require email verification: keep account disabled until activation
+        user.setEnabled(false);
 
-        // Generisanje aktivacionog tokena (opciono za production)
+        // Generisanje aktivacionog tokena
         String activationToken = UUID.randomUUID().toString();
         user.setActivationToken(activationToken);
         user.setTokenExpiryDate(LocalDateTime.now().plusHours(24));
@@ -61,19 +64,22 @@ public class UserService {
         // Čuvanje korisnika
         User savedUser = userRepository.save(user);
 
-        // Slanje aktivacionog email-a (opciono za production)
+        String activationLink = "http://localhost:8080/api/auth/activate?token=" + activationToken;
+        // Log activation link so it is easy to test locally
+        log.info("Activation link for {}: {}", user.getEmail(), activationLink);
+
+        // Pokušaj slanja aktivacionog email-a, ali ne aktiviramo nalog automatski ako ne uspe
         try {
-            String activationLink = "http://localhost:8080/api/auth/activate?token=" + activationToken;
             emailService.sendActivationEmail(user.getEmail(), activationLink);
         } catch (Exception e) {
-            // Ignorišemo grešku ako email servis nije konfigurisan
-            System.out.println("Email servis nije dostupan, nalog je automatski aktiviran.");
+            // Ako email servis nije konfigurisan, logujemo to — nalog ostaje neaktiviran
+            log.warn("Email servis nije dostupan, nalog je kreiran, ali nije aktiviran: {}", e.getMessage());
         }
 
         return savedUser;
     }
 
-    public boolean activateAccount(String token) {
+    public void activateAccount(String token) {
         User user = userRepository.findByActivationToken(token)
                 .orElseThrow(() -> new RuntimeException("Nevažeći aktivacioni token"));
 
@@ -85,8 +91,6 @@ public class UserService {
         user.setActivationToken(null);
         user.setTokenExpiryDate(null);
         userRepository.save(user);
-
-        return true;
     }
 
     public User findByEmail(String email) {
