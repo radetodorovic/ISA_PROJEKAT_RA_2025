@@ -2,7 +2,11 @@ package com.isa.backend.service;
 
 import com.isa.backend.dto.VideoPostDTO;
 import com.isa.backend.model.VideoPost;
+import com.isa.backend.model.VideoLikeEvent;
+import com.isa.backend.model.VideoViewEvent;
 import com.isa.backend.repository.VideoPostRepository;
+import com.isa.backend.repository.VideoLikeEventRepository;
+import com.isa.backend.repository.VideoViewEventRepository;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +37,12 @@ public class VideoPostService {
 
     @Autowired
     private VideoPostRepository videoPostRepository;
+
+    @Autowired
+    private VideoLikeEventRepository videoLikeEventRepository;
+
+    @Autowired
+    private VideoViewEventRepository videoViewEventRepository;
 
     @Autowired
     private FileStorageService fileStorageService;
@@ -184,10 +194,14 @@ public class VideoPostService {
      */
     @Transactional
     public void incrementViewCountByPath(String videoPath) {
-        int updated = videoPostRepository.incrementViewCountByVideoPath(videoPath);
+        VideoPost videoPost = videoPostRepository.findByVideoPath(videoPath)
+                .orElseThrow(() -> new RuntimeException("Video objava nije pronađena za dati filename: " + videoPath));
+        int updated = videoPostRepository.incrementViewCountById(videoPost.getId());
         if (updated == 0) {
             logger.warn("Video sa videoPath '{}' nije pronađen ili view count nije ažuriran.", videoPath);
+            return;
         }
+        videoViewEventRepository.save(new VideoViewEvent(videoPost.getId()));
     }
 
     /**
@@ -199,6 +213,7 @@ public class VideoPostService {
         if (updated == 0) {
             throw new RuntimeException("Video objava nije pronađena za dati id: " + id);
         }
+        videoViewEventRepository.save(new VideoViewEvent(id));
     }
 
     /**
@@ -302,6 +317,7 @@ public class VideoPostService {
                 .orElseThrow(() -> new RuntimeException("Video objava nije pronađena za dati id: " + id));
         videoPost.setLikeCount(videoPost.getLikeCount() + 1);
         videoPostRepository.save(videoPost);
+        videoLikeEventRepository.save(new VideoLikeEvent(id));
     }
 
     /**

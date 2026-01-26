@@ -5,7 +5,9 @@ import com.isa.backend.exception.RateLimitExceededException;
 import com.isa.backend.model.Comment;
 import com.isa.backend.model.User;
 import com.isa.backend.model.VideoPost;
+import com.isa.backend.model.VideoCommentEvent;
 import com.isa.backend.repository.CommentRepository;
+import com.isa.backend.repository.VideoCommentEventRepository;
 import com.isa.backend.repository.VideoPostRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
@@ -27,6 +29,9 @@ public class CommentService {
 
     @Autowired
     private VideoPostRepository videoPostRepository;
+
+    @Autowired
+    private VideoCommentEventRepository videoCommentEventRepository;
 
     @Autowired
     private UserService userService;
@@ -66,6 +71,7 @@ public class CommentService {
         // increment comment count on video
         vp.setCommentCount(vp.getCommentCount() + 1);
         videoPostRepository.save(vp);
+        videoCommentEventRepository.save(new VideoCommentEvent(videoId));
 
         return toDTO(saved);
     }
