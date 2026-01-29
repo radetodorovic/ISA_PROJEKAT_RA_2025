@@ -65,6 +65,8 @@ public class VideoPostService {
             MultipartFile thumbnail,
             MultipartFile video,
             String location,
+            Double latitude,
+            Double longitude,
             Long userId
     ) throws IOException {
 
@@ -75,6 +77,18 @@ public class VideoPostService {
 
         if (!fileStorageService.isMp4(video)) {
             throw new IllegalArgumentException("Video mora biti pravi MP4 fajl!");
+        }
+
+        if ((latitude == null) != (longitude == null)) {
+            throw new IllegalArgumentException("Latitude and longitude must be provided together.");
+        }
+        if (latitude != null) {
+            if (latitude < -90 || latitude > 90) {
+                throw new IllegalArgumentException("Latitude must be between -90 and 90.");
+            }
+            if (longitude < -180 || longitude > 180) {
+                throw new IllegalArgumentException("Longitude must be between -180 and 180.");
+            }
         }
 
         // Generiši finalna jedinstvena imena (bez ekstenzije promenjene)
@@ -111,6 +125,8 @@ public class VideoPostService {
             videoPost.setVideoPath(finalVideoFilename);
             videoPost.setVideoSize(video.getSize());
             videoPost.setLocation(location);
+            videoPost.setLatitude(latitude);
+            videoPost.setLongitude(longitude);
             videoPost.setUserId(userId);
 
             // Sačuvaj u bazu (još uvek temp fajlovi postoje)
@@ -334,6 +350,8 @@ public class VideoPostService {
         dto.setVideoSize(videoPost.getVideoSize());
         dto.setCreatedAt(videoPost.getCreatedAt());
         dto.setLocation(videoPost.getLocation());
+        dto.setLatitude(videoPost.getLatitude());
+        dto.setLongitude(videoPost.getLongitude());
         dto.setUserId(videoPost.getUserId());
         dto.setViewCount(videoPost.getViewCount());
         dto.setLikeCount(videoPost.getLikeCount());
@@ -346,3 +364,7 @@ public class VideoPostService {
         return dto;
     }
 }
+
+
+
+

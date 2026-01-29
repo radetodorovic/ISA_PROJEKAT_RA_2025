@@ -61,6 +61,8 @@ public class VideoPostController {
             @RequestParam("thumbnail") MultipartFile thumbnail,
             @RequestParam("video") MultipartFile video,
             @RequestParam(value = "location", required = false) String location,
+            @RequestParam(value = "latitude", required = false) Double latitude,
+            @RequestParam(value = "longitude", required = false) Double longitude,
             Principal principal
     ) {
         try {
@@ -86,7 +88,7 @@ public class VideoPostController {
 
             // Kreiranje video objave
             VideoPostDTO createdPost = videoPostService.createVideoPost(
-                    title, description, tags, thumbnail, video, location, userId
+                    title, description, tags, thumbnail, video, location, latitude, longitude, userId
             );
 
             return ResponseEntity.status(HttpStatus.CREATED).body(createdPost);

@@ -21,11 +21,14 @@ import org.springframework.web.bind.annotation.RestController;
 import java.security.Principal;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 
 @RestController
 @RequestMapping("/api/trending")
 @CrossOrigin(origins = "*")
 public class TrendingController {
+
+    private static final String GLOBAL_LOCATION = "global";
 
     @Autowired
     private TrendingVideoRepository trendingVideoRepository;
@@ -39,14 +42,32 @@ public class TrendingController {
     @Autowired
     private TrendingPipelineService trendingPipelineService;
 
+    @Value("${app.trending.radius-default-meters:2000}")
+    private int defaultRadiusMeters;
+
     @GetMapping
     public ResponseEntity<?> getTrending(
             @RequestParam(value = "location", required = false) String location,
+            @RequestParam(value = "lat", required = false) Double latitude,
+            @RequestParam(value = "lng", required = false) Double longitude,
+            @RequestParam(value = "radiusMeters", required = false) Integer radiusMeters,
             Principal principal
     ) {
         if (principal == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body("Morate biti prijavljeni da biste videli trending.");
+        }
+
+        if ((latitude == null) != (longitude == null)) {
+            return ResponseEntity.badRequest()
+                    .body("Latitude and longitude must be provided together.");
+        }
+
+        boolean useGeo = latitude != null && longitude != null;
+        double effectiveRadius = radiusMeters != null ? radiusMeters : defaultRadiusMeters;
+        if (useGeo && effectiveRadius <= 0) {
+            return ResponseEntity.badRequest()
+                    .body("radiusMeters must be a positive number.");
         }
 
         String normalized = null;
@@ -58,12 +79,23 @@ public class TrendingController {
         }
 
         if (normalized == null) {
-            normalized = "global";
+            normalized = GLOBAL_LOCATION;
         }
 
-        List<TrendingVideo> items = trendingVideoRepository.findLatestByLocation(normalized);
-        if (items.isEmpty() && !"global".equals(normalized)) {
-            items = trendingVideoRepository.findLatestByLocation("global");
+        List<TrendingVideo> items;
+        if (useGeo) {
+            try {
+                items = trendingVideoRepository.findLatestByLocationWithinRadius(
+                        GLOBAL_LOCATION, latitude, longitude, (int) effectiveRadius
+                );
+            } catch (Exception ex) {
+                items = trendingVideoRepository.findLatestByLocation(GLOBAL_LOCATION);
+            }
+        } else {
+            items = trendingVideoRepository.findLatestByLocation(normalized);
+            if (items.isEmpty() && !GLOBAL_LOCATION.equals(normalized)) {
+                items = trendingVideoRepository.findLatestByLocation(GLOBAL_LOCATION);
+            }
         }
 
         List<TrendingVideoDTO> response = new ArrayList<>();
@@ -90,4 +122,5 @@ public class TrendingController {
         trendingPipelineService.runPipeline(java.time.LocalDate.now());
         return ResponseEntity.ok("Trending pipeline pokrenut.");
     }
+
 }

@@ -46,6 +46,9 @@ public class TrendingPipelineService {
     @Value("${app.trending.weight.comment:5}")
     private int commentWeight;
 
+    @Value("${app.trending.max-per-location:50}")
+    private int maxPerLocation;
+
     @Autowired
     private VideoViewEventRepository videoViewEventRepository;
 
@@ -133,7 +136,7 @@ public class TrendingPipelineService {
                         int byScore = Long.compare(b.score, a.score);
                         return byScore != 0 ? byScore : Long.compare(a.videoId, b.videoId);
                     })
-                    .limit(3)
+                    .limit(maxPerLocation)
                     .toList();
 
             int rank = 1;

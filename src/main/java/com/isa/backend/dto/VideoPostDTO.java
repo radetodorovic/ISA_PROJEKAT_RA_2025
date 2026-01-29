@@ -23,6 +23,8 @@ public class VideoPostDTO {
     private Long videoSize;
     private LocalDateTime createdAt;
     private String location;
+    private Double latitude;
+    private Double longitude;
     private Long userId;
     private Integer viewCount;
     private Integer likeCount;
@@ -106,6 +108,22 @@ public class VideoPostDTO {
 
     public void setLocation(String location) {
         this.location = location;
+    }
+
+    public Double getLatitude() {
+        return latitude;
+    }
+
+    public void setLatitude(Double latitude) {
+        this.latitude = latitude;
+    }
+
+    public Double getLongitude() {
+        return longitude;
+    }
+
+    public void setLongitude(Double longitude) {
+        this.longitude = longitude;
     }
 
     public Long getUserId() {
