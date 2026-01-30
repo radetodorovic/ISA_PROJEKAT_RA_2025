@@ -19,15 +19,21 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.security.Principal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/trending")
 @CrossOrigin(origins = "*")
 public class TrendingController {
 
+    private static final Logger log = LoggerFactory.getLogger(TrendingController.class);
     private static final String GLOBAL_LOCATION = "global";
 
     @Autowired
@@ -119,8 +125,29 @@ public class TrendingController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body("Morate biti prijavljeni da biste pokrenuli trending pipeline.");
         }
+        long startTime = System.currentTimeMillis();
         trendingPipelineService.runPipeline(java.time.LocalDate.now());
+        long endTime = System.currentTimeMillis();
+        log.info("Trending pipeline executed in {}ms", endTime - startTime);
         return ResponseEntity.ok("Trending pipeline pokrenut.");
+    }
+
+    @GetMapping("/stats")
+    public ResponseEntity<Map<String, Object>> getTrendingStats() {
+        long startTime = System.currentTimeMillis();
+
+        // Trending logika - brojimo sve trending videe
+        List<TrendingVideo> allTrending = trendingVideoRepository.findLatestByLocation(GLOBAL_LOCATION);
+
+        long endTime = System.currentTimeMillis();
+        long responseTime = endTime - startTime;
+
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("responseTimeMs", responseTime);
+        stats.put("timestamp", LocalDateTime.now());
+        stats.put("totalTrendingVideos", allTrending.size());
+
+        return ResponseEntity.ok(stats);
     }
 
 }
