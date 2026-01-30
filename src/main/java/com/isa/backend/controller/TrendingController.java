@@ -70,6 +70,7 @@ public class TrendingController {
         }
 
         boolean useGeo = latitude != null && longitude != null;
+
         double effectiveRadius = radiusMeters != null ? radiusMeters : defaultRadiusMeters;
         if (useGeo && effectiveRadius <= 0) {
             return ResponseEntity.badRequest()
