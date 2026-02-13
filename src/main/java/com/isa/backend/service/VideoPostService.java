@@ -7,6 +7,7 @@ import com.isa.backend.model.VideoViewEvent;
 import com.isa.backend.repository.VideoPostRepository;
 import com.isa.backend.repository.VideoLikeEventRepository;
 import com.isa.backend.repository.VideoViewEventRepository;
+import com.isa.backend.transcoding.TranscodingQueueService;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +19,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -47,6 +49,9 @@ public class VideoPostService {
     @Autowired
     private FileStorageService fileStorageService;
 
+    @Autowired
+    private TranscodingQueueService transcodingQueueService;
+
     @Value("${file.upload.dir:uploads/videos}")
     private String videoUploadDir;
 
@@ -67,7 +72,9 @@ public class VideoPostService {
             String location,
             Double latitude,
             Double longitude,
-            Long userId
+            Long userId,
+            List<String> transcodeProfiles,
+            LocalDateTime scheduledAt
     ) throws IOException {
 
         // Validacija
@@ -124,6 +131,7 @@ public class VideoPostService {
             videoPost.setThumbnailPath(finalThumbFilename);
             videoPost.setVideoPath(finalVideoFilename);
             videoPost.setVideoSize(video.getSize());
+            videoPost.setScheduledAt(scheduledAt);
             videoPost.setLocation(location);
             videoPost.setLatitude(latitude);
             videoPost.setLongitude(longitude);
@@ -136,6 +144,7 @@ public class VideoPostService {
             final String tt = tempThumbName;
             final String fv = finalVideoFilename;
             final String ft = finalThumbFilename;
+            final List<String> profilesCopy = transcodeProfiles == null ? null : new ArrayList<>(transcodeProfiles);
             // Registruj transaction synchronization: na commit premestiti temp fajlove u finalne, na rollback obrisati temp fajlove
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
@@ -143,6 +152,8 @@ public class VideoPostService {
                     try {
                         fileStorageService.moveTempThumbnailToFinal(tt, ft);
                         fileStorageService.moveTempVideoToFinal(tv, fv);
+                        Path finalPath = Paths.get(videoUploadDir).resolve(fv).normalize();
+                        transcodingQueueService.enqueue(finalPath.toAbsolutePath().toString(), profilesCopy);
                     } catch (IOException e) {
                         // Log error (ne možemo rollback-ovati ovde jer transakcija je već commit-ovana)
                         logger.error("Greška pri premještanju fajlova nakon commita:", e);
@@ -181,13 +192,19 @@ public class VideoPostService {
      * Vraća sve video objave
      */
     public List<VideoPostDTO> getAllVideoPosts() {
-        return getAllVideoPosts(false);
+        return getAllVideoPostsForViewer(null);
     }
 
     public List<VideoPostDTO> getAllVideoPosts(boolean authenticated) {
+        return getAllVideoPostsForViewer(null);
+    }
+
+    public List<VideoPostDTO> getAllVideoPostsForViewer(Long viewerUserId) {
+        LocalDateTime now = LocalDateTime.now();
         return videoPostRepository.findAllByOrderByCreatedAtDesc()
                 .stream()
-                .map(vp -> convertToDTO(vp, authenticated))
+                .filter(vp -> isAvailableForViewer(vp, viewerUserId, now))
+                .map(vp -> convertToDTO(vp, viewerUserId != null))
                 .collect(Collectors.toList());
     }
 
@@ -195,13 +212,16 @@ public class VideoPostService {
      * Vraća video objavu po ID-u
      */
     public VideoPostDTO getVideoPostById(Long id) {
-        return getVideoPostById(id, false);
+        return getVideoPostById(id, null);
     }
 
-    public VideoPostDTO getVideoPostById(Long id, boolean authenticated) {
+    public VideoPostDTO getVideoPostById(Long id, Long viewerUserId) {
         VideoPost videoPost = videoPostRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Video objava nije pronađena!"));
-        return convertToDTO(videoPost, authenticated);
+        if (!isAvailableForViewer(videoPost, viewerUserId, LocalDateTime.now())) {
+            throw new RuntimeException("Video objava nije dostupna pre zakazanog vremena!");
+        }
+        return convertToDTO(videoPost, viewerUserId != null);
     }
 
     /**
@@ -238,6 +258,15 @@ public class VideoPostService {
     public VideoPost getVideoPostByVideoPath(String videoPath) {
         return videoPostRepository.findByVideoPath(videoPath)
                 .orElseThrow(() -> new RuntimeException("Video objava nije pronađena za dati filename: " + videoPath));
+    }
+
+    public VideoPost getVideoPostByVideoPathForViewer(String videoPath, Long viewerUserId) {
+        VideoPost videoPost = videoPostRepository.findByVideoPath(videoPath)
+                .orElseThrow(() -> new RuntimeException("Video objava nije pronaÄ‘ena za dati filename: " + videoPath));
+        if (!isAvailableForViewer(videoPost, viewerUserId, LocalDateTime.now())) {
+            throw new RuntimeException("Video objava nije dostupna pre zakazanog vremena!");
+        }
+        return videoPost;
     }
 
     /**
@@ -349,6 +378,7 @@ public class VideoPostService {
         dto.setVideoUrl("/api/videos/stream/" + videoPost.getVideoPath());
         dto.setVideoSize(videoPost.getVideoSize());
         dto.setCreatedAt(videoPost.getCreatedAt());
+        dto.setScheduledAt(videoPost.getScheduledAt());
         dto.setLocation(videoPost.getLocation());
         dto.setLatitude(videoPost.getLatitude());
         dto.setLongitude(videoPost.getLongitude());
@@ -362,6 +392,15 @@ public class VideoPostService {
         dto.setCanComment(authenticated);
 
         return dto;
+    }
+
+    private boolean isAvailableForViewer(VideoPost videoPost, Long viewerUserId, LocalDateTime now) {
+        LocalDateTime scheduledAt = videoPost.getScheduledAt();
+        boolean published = scheduledAt == null || !scheduledAt.isAfter(now);
+        if (published) {
+            return true;
+        }
+        return viewerUserId != null && viewerUserId.equals(videoPost.getUserId());
     }
 }
 

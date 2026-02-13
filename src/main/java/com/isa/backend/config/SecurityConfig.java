@@ -33,6 +33,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Allow preflight requests
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        // WebSocket handshake
+                        .requestMatchers("/ws/**").permitAll()
                         // Public endpoints (GETs)
                         .requestMatchers(HttpMethod.GET, "/api/videos/**", "/api/videos/thumbnail/**", "/api/videos/stream/**", "/api/users/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()

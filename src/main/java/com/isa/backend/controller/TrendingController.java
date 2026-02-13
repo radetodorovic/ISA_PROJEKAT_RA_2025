@@ -89,6 +89,9 @@ public class TrendingController {
             normalized = GLOBAL_LOCATION;
         }
 
+        User viewer = userService.findByEmail(principal.getName());
+        Long viewerUserId = viewer.getId();
+
         List<TrendingVideo> items;
         if (useGeo) {
             try {
@@ -107,7 +110,12 @@ public class TrendingController {
 
         List<TrendingVideoDTO> response = new ArrayList<>();
         for (TrendingVideo item : items) {
-            VideoPostDTO videoDto = videoPostService.getVideoPostById(item.getVideoId(), true);
+            VideoPostDTO videoDto;
+            try {
+                videoDto = videoPostService.getVideoPostById(item.getVideoId(), viewerUserId);
+            } catch (RuntimeException ex) {
+                continue;
+            }
             TrendingVideoDTO dto = new TrendingVideoDTO();
             dto.setVideo(videoDto);
             dto.setScore(item.getScore());

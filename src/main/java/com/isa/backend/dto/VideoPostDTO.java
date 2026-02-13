@@ -22,6 +22,7 @@ public class VideoPostDTO {
     private String videoUrl;
     private Long videoSize;
     private LocalDateTime createdAt;
+    private LocalDateTime scheduledAt;
     private String location;
     private Double latitude;
     private Double longitude;
@@ -100,6 +101,14 @@ public class VideoPostDTO {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getScheduledAt() {
+        return scheduledAt;
+    }
+
+    public void setScheduledAt(LocalDateTime scheduledAt) {
+        this.scheduledAt = scheduledAt;
     }
 
     public String getLocation() {

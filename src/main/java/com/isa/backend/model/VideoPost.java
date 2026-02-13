@@ -39,6 +39,8 @@ public class VideoPost {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    private LocalDateTime scheduledAt;
+
     private String location;
 
     private Double latitude;
@@ -123,6 +125,14 @@ public class VideoPost {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getScheduledAt() {
+        return scheduledAt;
+    }
+
+    public void setScheduledAt(LocalDateTime scheduledAt) {
+        this.scheduledAt = scheduledAt;
     }
 
     public String getLocation() {

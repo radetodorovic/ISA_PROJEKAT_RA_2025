@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.Files;
@@ -63,6 +65,8 @@ public class VideoPostController {
             @RequestParam(value = "location", required = false) String location,
             @RequestParam(value = "latitude", required = false) Double latitude,
             @RequestParam(value = "longitude", required = false) Double longitude,
+            @RequestParam(value = "transcodeProfiles", required = false) List<String> transcodeProfiles,
+            @RequestParam(value = "scheduledAt", required = false) String scheduledAt,
             Principal principal
     ) {
         try {
@@ -86,9 +90,22 @@ public class VideoPostController {
                 return ResponseEntity.badRequest().body("Video mora biti u MP4 formatu!");
             }
 
+            LocalDateTime scheduledAtValue = null;
+            if (scheduledAt != null && !scheduledAt.isBlank()) {
+                try {
+                    if (scheduledAt.length() == 16) {
+                        scheduledAtValue = LocalDateTime.parse(scheduledAt, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"));
+                    } else {
+                        scheduledAtValue = LocalDateTime.parse(scheduledAt);
+                    }
+                } catch (DateTimeParseException e) {
+                    return ResponseEntity.badRequest().body("Neispravan format zakazanog vremena. Ocekivan format: YYYY-MM-DDTHH:MM");
+                }
+            }
+
             // Kreiranje video objave
             VideoPostDTO createdPost = videoPostService.createVideoPost(
-                    title, description, tags, thumbnail, video, location, latitude, longitude, userId
+                    title, description, tags, thumbnail, video, location, latitude, longitude, userId, transcodeProfiles, scheduledAtValue
             );
 
             return ResponseEntity.status(HttpStatus.CREATED).body(createdPost);
@@ -114,6 +131,8 @@ public class VideoPostController {
         }
         // For now, increment like count in service (not implemented fully)
         try {
+            User user = userService.findByEmail(principal.getName());
+            videoPostService.getVideoPostById(id, user.getId());
             videoPostService.incrementLikeCount(id);
             return ResponseEntity.ok("Lajk registrovan");
         } catch (RuntimeException e) {
@@ -132,6 +151,7 @@ public class VideoPostController {
 
         try {
             User user = userService.findByEmail(principal.getName());
+            videoPostService.getVideoPostById(id, user.getId());
             CommentDTO saved = commentService.addComment(id, user.getId(), text);
             return ResponseEntity.status(HttpStatus.CREATED).body(saved);
         } catch (RateLimitExceededException e) {
@@ -144,8 +164,11 @@ public class VideoPostController {
     @GetMapping("/{id}/comments")
     public ResponseEntity<?> getComments(@PathVariable Long id,
                                          @RequestParam(value = "page", required = false, defaultValue = "0") int page,
-                                         @RequestParam(value = "size", required = false, defaultValue = "20") int size) {
+                                         @RequestParam(value = "size", required = false, defaultValue = "20") int size,
+                                         Principal principal) {
         try {
+            Long viewerUserId = principalToUserId(principal);
+            videoPostService.getVideoPostById(id, viewerUserId);
             List<CommentDTO> comments = commentService.getCommentsForVideo(id, page, size);
             return ResponseEntity.ok(comments);
         } catch (RuntimeException e) {
@@ -160,9 +183,11 @@ public class VideoPostController {
     @GetMapping("/stream/{filename:.+}/comments")
     public ResponseEntity<?> getCommentsByFilename(@PathVariable String filename,
                                                    @RequestParam(value = "page", required = false, defaultValue = "0") int page,
-                                                   @RequestParam(value = "size", required = false, defaultValue = "20") int size) {
+                                                   @RequestParam(value = "size", required = false, defaultValue = "20") int size,
+                                                   Principal principal) {
         try {
-            VideoPost vp = videoPostService.getVideoPostByVideoPath(filename);
+            Long viewerUserId = principalToUserId(principal);
+            VideoPost vp = videoPostService.getVideoPostByVideoPathForViewer(filename, viewerUserId);
             List<CommentDTO> comments = commentService.getCommentsForVideo(vp.getId(), page, size);
             return ResponseEntity.ok(comments);
         } catch (RuntimeException e) {
@@ -176,7 +201,8 @@ public class VideoPostController {
      */
     @GetMapping
     public ResponseEntity<List<VideoPostDTO>> getAllVideos(Principal principal) {
-        List<VideoPostDTO> videos = videoPostService.getAllVideoPosts(principal != null);
+        Long viewerUserId = principalToUserId(principal);
+        List<VideoPostDTO> videos = videoPostService.getAllVideoPostsForViewer(viewerUserId);
         return ResponseEntity.ok(videos);
     }
 
@@ -186,7 +212,8 @@ public class VideoPostController {
     @GetMapping("/{id}")
     public ResponseEntity<?> getVideoById(@PathVariable Long id, Principal principal) {
         try {
-            VideoPostDTO video = videoPostService.getVideoPostById(id, principal != null);
+            Long viewerUserId = principalToUserId(principal);
+            VideoPostDTO video = videoPostService.getVideoPostById(id, viewerUserId);
             return ResponseEntity.ok(video);
         } catch (RuntimeException e) {
             return ResponseEntity.notFound().build();
@@ -221,13 +248,14 @@ public class VideoPostController {
      * 🎬 Stream-uje video fajl
      */
     @GetMapping("/stream/{filename:.+}")
-    public ResponseEntity<Resource> streamVideo(@PathVariable String filename, HttpServletRequest request) {
+    public ResponseEntity<Resource> streamVideo(@PathVariable String filename, HttpServletRequest request, Principal principal) {
         try {
+            Long viewerUserId = principalToUserId(principal);
+            VideoPost vp = videoPostService.getVideoPostByVideoPathForViewer(filename, viewerUserId);
             // Increment view count only for initial requests (no Range header or Range starting at 0)
             String range = request.getHeader("Range");
             if (range == null || range.startsWith("bytes=0-")) {
-                // filename here is the stored unique filename (videoPath)
-                videoPostService.incrementViewCountByPath(filename);
+                videoPostService.incrementViewCountById(vp.getId());
             }
 
             Path filePath = Paths.get(videoUploadDir).resolve(filename).normalize();
@@ -243,8 +271,22 @@ public class VideoPostController {
             } else {
                 return ResponseEntity.notFound().build();
             }
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    private Long principalToUserId(Principal principal) {
+        if (principal == null) {
+            return null;
+        }
+        try {
+            User user = userService.findByEmail(principal.getName());
+            return user.getId();
+        } catch (RuntimeException ex) {
+            return null;
         }
     }
 }
