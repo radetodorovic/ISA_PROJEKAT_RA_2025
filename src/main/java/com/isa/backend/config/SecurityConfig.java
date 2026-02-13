@@ -36,7 +36,7 @@ public class SecurityConfig {
                         // WebSocket handshake
                         .requestMatchers("/ws/**").permitAll()
                         // Public endpoints (GETs)
-                        .requestMatchers(HttpMethod.GET, "/api/videos/**", "/api/videos/thumbnail/**", "/api/videos/stream/**", "/api/users/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/videos/**", "/api/videos/thumbnail/**", "/api/videos/stream/**", "/api/users/**", "/api/whoami").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         // Allow root and static resources (for health checks, welcome page, etc.)
                         .requestMatchers("/", "/error", "/actuator/**", "/favicon.ico").permitAll()
