@@ -33,7 +33,7 @@ public class BackendApplication {
         try {
             hostAddress = InetAddress.getLocalHost().getHostAddress();
         } catch (Exception e) {
-            log.debug("Ne mogu da dohvatim lokalnu IP adresu, koristi se localhost: {}", e.getMessage());
+            log.warn("Could not get host address", e);
         }
 
         String localUrl = "http://localhost:" + port + contextPath;
