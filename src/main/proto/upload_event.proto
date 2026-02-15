@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package com.isa.backend.proto;
+
+option java_package = "com.isa.backend.proto";
+option java_outer_classname = "UploadEventProto";
+
+message UploadEvent {
+  string video_id = 1;
+  string title = 2;
+  string description = 3;
+  repeated string tags = 4;
+  string author_email = 5;
+  string author_name = 6;
+  int64 video_size_bytes = 7;
+  int64 thumbnail_size_bytes = 8;
+  string video_path = 9;
+  string thumbnail_path = 10;
+  int64 upload_timestamp = 11;
+  string location = 12;
+  double latitude = 13;
+  double longitude = 14;
+  repeated string transcode_profiles = 15;
+}
+

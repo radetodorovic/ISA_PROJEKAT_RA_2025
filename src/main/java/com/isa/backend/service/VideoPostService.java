@@ -1,12 +1,15 @@
 package com.isa.backend.service;
 
 import com.isa.backend.dto.VideoPostDTO;
+import com.isa.backend.dto.UploadEventDTO;
 import com.isa.backend.model.VideoPost;
 import com.isa.backend.model.VideoLikeEvent;
 import com.isa.backend.model.VideoViewEvent;
+import com.isa.backend.model.User;
 import com.isa.backend.repository.VideoPostRepository;
 import com.isa.backend.repository.VideoLikeEventRepository;
 import com.isa.backend.repository.VideoViewEventRepository;
+import com.isa.backend.repository.UserRepository;
 import com.isa.backend.transcoding.TranscodingQueueService;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
@@ -51,6 +54,15 @@ public class VideoPostService {
 
     @Autowired
     private TranscodingQueueService transcodingQueueService;
+
+    @Autowired
+    private VideoUploadEventProducer uploadEventProducer;
+
+    @Autowired
+    private MessageComparisonService comparisonService;
+
+    @Autowired
+    private UserRepository userRepository;
 
     @Value("${file.upload.dir:uploads/videos}")
     private String videoUploadDir;
@@ -145,6 +157,10 @@ public class VideoPostService {
             final String fv = finalVideoFilename;
             final String ft = finalThumbFilename;
             final List<String> profilesCopy = transcodeProfiles == null ? null : new ArrayList<>(transcodeProfiles);
+            final Long videoId = savedPost.getId();
+            final long videoSizeBytes = video.getSize();
+            final long thumbnailSizeBytes = thumbnail.getSize();
+
             // Registruj transaction synchronization: na commit premestiti temp fajlove u finalne, na rollback obrisati temp fajlove
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
@@ -154,9 +170,16 @@ public class VideoPostService {
                         fileStorageService.moveTempVideoToFinal(tv, fv);
                         Path finalPath = Paths.get(videoUploadDir).resolve(fv).normalize();
                         transcodingQueueService.enqueue(finalPath.toAbsolutePath().toString(), profilesCopy);
+
+                        // Šalji MQ poruke nakon uspešnog upload-a
+                        sendUploadEventMessages(savedPost, userId, videoSizeBytes, thumbnailSizeBytes,
+                                fv, ft, location, latitude, longitude, profilesCopy);
+
                     } catch (IOException e) {
                         // Log error (ne možemo rollback-ovati ovde jer transakcija je već commit-ovana)
                         logger.error("Greška pri premještanju fajlova nakon commita:", e);
+                    } catch (Exception e) {
+                        logger.error("Greška pri slanju upload event poruka:", e);
                     }
                 }
 
@@ -402,7 +425,55 @@ public class VideoPostService {
         }
         return viewerUserId != null && viewerUserId.equals(videoPost.getUserId());
     }
+
+    /**
+     * Kreira i šalje UploadEvent poruke u JSON i Protobuf formatu
+     */
+    private void sendUploadEventMessages(VideoPost videoPost, Long userId, long videoSizeBytes,
+            long thumbnailSizeBytes, String videoPath, String thumbnailPath, String location,
+            Double latitude, Double longitude, List<String> transcodeProfiles) {
+
+        try {
+            // Pronađi user podatke
+            User user = userRepository.findById(userId).orElse(null);
+            String authorEmail = user != null ? user.getEmail() : "unknown@email.com";
+            String authorName = user != null ? (user.getFirstName() + " " + user.getLastName()) : "Unknown User";
+
+            // Kreiraj DTO za JSON
+            UploadEventDTO eventDTO = UploadEventDTO.builder()
+                    .videoId(String.valueOf(videoPost.getId()))
+                    .title(videoPost.getTitle())
+                    .description(videoPost.getDescription())
+                    .tags(videoPost.getTags() != null ? new ArrayList<>(videoPost.getTags()) : new ArrayList<>())
+                    .authorEmail(authorEmail)
+                    .authorName(authorName)
+                    .videoSizeBytes(videoSizeBytes)
+                    .thumbnailSizeBytes(thumbnailSizeBytes)
+                    .videoPath(videoPath)
+                    .thumbnailPath(thumbnailPath)
+                    .uploadTimestamp(System.currentTimeMillis())
+                    .location(location)
+                    .latitude(latitude)
+                    .longitude(longitude)
+                    .transcodeProfiles(transcodeProfiles != null ? transcodeProfiles : new ArrayList<>())
+                    .build();
+
+            // Meri i šalji JSON poruku
+            comparisonService.serializeJsonAndMeasure(eventDTO);
+            uploadEventProducer.sendJsonEvent(eventDTO);
+
+            // Meri i šalji Protobuf poruku (dummy za sada)
+            byte[] protobufBytes = comparisonService.serializeProtobufAndMeasure(eventDTO);
+            uploadEventProducer.sendProtobufEvent(protobufBytes);
+
+            logger.info("Upload event poruke poslate za video ID: {} (JSON i Protobuf)", videoPost.getId());
+
+        } catch (Exception e) {
+            logger.error("Greška pri slanju upload event poruka za video ID: " + videoPost.getId(), e);
+        }
+    }
 }
+
 
 
 
